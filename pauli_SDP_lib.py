@@ -59,12 +59,11 @@ def p(x): # shorthand func for pstring
     return pstring(x)
     
 def constructBasis(oplist,n_sites):
-    ops = oplist
+    ops = [x for x in oplist if x != 'I']
     N = n_sites
     operators = []
-    if 'I' in ops:
+    if 'I' in oplist:
         withIdentity = True
-        ops.remove('I')
     else:
         withIdentity = False
     L = len(ops)
@@ -162,6 +161,10 @@ class pstring(sp.Symbol): # Pauli string class
         self.xs = self.ops.count("X")
         self.ys = self.ops.count("Y")
         self.zs = self.ops.count("Z")
+
+        self.counts = np.array([self.ids,self.xs,self.ys,self.zs])
+
+        
             
         
     def __mul__(self, other): # multiplication of ops happens site-wise
@@ -220,18 +223,23 @@ class pSDP: # spin chain SDP class
         while duals_set:
             x = duals_set.pop()  # Remove and return an arbitrary element from duals_set
             orbit = [x]
-            for n in range(1, N):
+            for n in range(1, N+1):
                 y = proll(x, n)
                 if y in duals_set:
                     orbit.append(y)
                     duals_set.remove(y)  # Remove y from duals_set as it's already in orbit
-            if len(orbit) == N: # full orbits are of this size
-                self.orbits.append(orbit)
+            
+            self.orbits.append(orbit)
+           
                 
 
         self.n_duals = len(self.orbits)
-        
         if v: print("Number of dual variables:",self.n_duals)
+
+        self.solved = False
+        self.res = None
+        
+        
         
         # construct PSD in the dual perspective
         rows,cols = self.M.shape
@@ -287,6 +295,10 @@ class pSDP: # spin chain SDP class
 
         result = sdp.solve(solver = cp.MOSEK,verbose = False)
         optimal = x.value
+
+        self.result = (result,optimal)
+        self.solved = True
+
         return result*self.N,optimal
 
 
@@ -298,10 +310,11 @@ if __name__ == '__main__':
 
     h = -1*zz - mu*x
 
-    N = 15
+    N = 8
 
     t = time()
-    yz = pSDP(['Y','Z'],N,Ham = h)
+    yz = pSDP(['I','X','ZZ'],N,Ham = h)
+    print(yz.basis)
     yz_res,_ = yz.solve()
     tt = time()
 

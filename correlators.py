@@ -24,7 +24,6 @@ def getCorrelators(problem):
     
     short_ops = np.array([x.expr.replace('I','') for x in ops])
     sym_corrs = list(np.unique(short_ops)) # find which types of correlators we have
-    
     corr_dict = {}
     for corr in sym_corrs: # for each type of correlator,
         if corr[::-1] in sym_corrs:
@@ -53,7 +52,6 @@ def getCorrelators(problem):
             dists = [op.expr.index(o2)-op.expr.rfind(o1) for op in v]
             d1 = [d % N for d in dists] # find distances mod N
             d2 = [abs(d) for d in dists]
-
             vals[d1] = x
             vals[d2] = x
                 
