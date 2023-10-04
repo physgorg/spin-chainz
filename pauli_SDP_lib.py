@@ -18,7 +18,7 @@ from time import time
 ######################################################################
 
 # FUNCTIONS
-
+from sympy.physics.paulialgebra import Pauli
 def pauli(j): # pauli matrix by vec index
     if j == 0:
         return 1
@@ -85,7 +85,7 @@ def getMcoeff(M,var): # get pstring matrix coefficient
     # t0 = time()
     atoms = M.atoms(pstring)
     rows,cols = M.shape
-    cf = sp.zeros(rows,cols)
+    cf = np.zeros((rows,cols),dtype = complex)
     if var not in atoms:
         return 0
     else:
@@ -93,9 +93,7 @@ def getMcoeff(M,var): # get pstring matrix coefficient
             for j in range(cols):
                 element = M[i, j]
                 if element.has(var):
-                    cf[i,j] = element.coeff(var)
-    # t1 = time()
-    # print("Mcoeff time",t1-t0)
+                    cf[i,j] = complex(element.coeff(var))
     return cf
 
 
@@ -245,10 +243,10 @@ class pSDP: # spin chain SDP class
         rows,cols = self.M.shape
         self.Fmats = [np.zeros(self.M.shape,dtype = complex)]
         for orbit in self.orbits:
-            cf = sp.zeros(rows,cols)
+            cf = np.zeros((rows,cols),dtype = complex)
             for x in orbit:
                 cf += getMcoeff(self.M,x)
-            self.Fmats.append(np.array(cf,dtype = complex))
+            self.Fmats.append(cf)
 
         v = self.M.xreplace({a:0 for a in self.all_vars})
         v = v.xreplace({pID(N):1})
@@ -313,8 +311,8 @@ if __name__ == '__main__':
     N = 8
 
     t = time()
-    yz = pSDP(['I','X','ZZ'],N,Ham = h)
-    print(yz.basis)
+    yz = pSDP(['Y','Z'],N,Ham = h)
+    # print(yz.basis)
     yz_res,_ = yz.solve()
     tt = time()
 

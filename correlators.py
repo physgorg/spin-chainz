@@ -26,9 +26,9 @@ def getCorrelators(problem):
     sym_corrs = list(np.unique(short_ops)) # find which types of correlators we have
     corr_dict = {}
     for corr in sym_corrs: # for each type of correlator,
-        if corr[::-1] in sym_corrs:
-            inds = np.where((short_ops == corr) | (short_ops == corr[::-1])) #
-            sym_corrs.remove(corr[::-1])
+        
+        inds = np.where((short_ops == corr) | (short_ops == corr[::-1])) #
+
         v = ops[inds] # get corresponding pstrings
         x = xvec[inds] # get optimal values
         
@@ -54,8 +54,9 @@ def getCorrelators(problem):
             d2 = [abs(d) for d in dists]
             vals[d1] = x
             vals[d2] = x
-                
-            corr_dict[corr]= (dr,vals)
+
+            if corr[::-1] not in list(corr_dict.keys()):
+                corr_dict[corr]= (dr,vals)
         else:
             corr_dict[corr] = (x,v)
         
@@ -88,11 +89,19 @@ if __name__ == '__main__':
     N = 8
 
     t = time()
-    yz = pSDP(['Y','Z'],N,Ham = h)
+    yz = pSDP(['X','Y','Z'],N,Ham = h)
     yz_res,_ = yz.solve()
     tt = time()
 
     print("yz time",tt-t)
     print('yz res',yz_res)
+
+    t = time()
+    corrs = getCorrelators(yz)
+    tt = time()
+    print('corr time',tt-t)
+    print("CORRELATORS")
+    for x in corrs:
+        print(x,corrs[x])
 
     
