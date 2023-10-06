@@ -18,7 +18,8 @@ from time import time
 ######################################################################
 
 # FUNCTIONS
-from sympy.physics.paulialgebra import Pauli
+
+###### pauli strings ######
 def pauli(j): # pauli matrix by vec index
     if j == 0:
         return 1
@@ -42,8 +43,10 @@ def pID(n): # pauli string identity
     ls = ssum(ls)
     return pstring(ls)
 
-def frob(A,B): # sympy Frobenius inner product
-    return sp.trace(Dagger(A)*B)
+def p(x): # shorthand func for pstring
+    return pstring(x)
+
+###### rolling & ZN orbit stuff ######
 
 def roll_list(input_list, n): # numpy roll method but for list
     length = len(input_list)
@@ -54,9 +57,44 @@ def proll(x,n): # roll a pstring object
     s = roll_list(x.ops,n)
     s = ssum(s)
     return pstring(s)
- 
-def p(x): # shorthand func for pstring
-    return pstring(x)
+
+
+def F_revolve(arr,N,L,withIdentity):
+    idL = np.identity(L)
+    zeroL = np.zeros((L,L))
+    sh = (N*L,N*L)
+    
+    if withIdentity:
+        zer = np.array([[arr[0,0]]]) # identity corner
+        v = arr[0,1:] # identity times ops
+        subF = arr[1:,1:]
+        revved = F_revolve(subF,N,L,False) # orbit the LN x LN portion
+        
+        # orbit the identity parts
+        vorber = np.block([[np.eye(L) for j in range(N)] for i in range(N)])
+        v = np.dot(vorber,v)
+        v = np.array([v])
+        
+        vc = v.conj()
+        res = np.block([[zer,v],[vc.T,revved]]) # re-blockify
+        return res
+        
+    else:
+
+        res = np.zeros(sh,dtype = complex)
+        P = np.block([[1 if j == (i + 1) % N else 0 for j in range(N)] for i in range(N)])
+        res += arr
+        for n in range(1,N):
+            pn = np.linalg.matrix_power(P,n)
+            pn = np.kron(pn,idL)
+            term = np.dot(pn.T,np.dot(arr,pn))
+            res += term
+        return res
+
+###### sdp basis stuff ######
+
+def frob(A,B): # sympy Frobenius inner product
+    return sp.trace(Dagger(A)*B)
     
 def constructBasis(oplist,n_sites):
     ops = [x for x in oplist if x != 'I']
@@ -82,19 +120,36 @@ def constructBasis(oplist,n_sites):
         return sp.Matrix(operators) 
 
 def getMcoeff(M,var): # get pstring matrix coefficient
-    # t0 = time()
     atoms = M.atoms(pstring)
     rows,cols = M.shape
     cf = np.zeros((rows,cols),dtype = complex)
-    if var not in atoms:
-        return 0
-    else:
-        for i in range(rows):
-            for j in range(cols):
-                element = M[i, j]
-                if element.has(var):
-                    cf[i,j] = complex(element.coeff(var))
+    for i in range(rows):
+        for j in range(i,cols):
+            element = M[i, j]
+            if element.has(var):
+                cf[i,j] = complex(element.coeff(var))
+    cf = (cf + cf.conj().T)
+
     return cf
+
+def pcom(a,b):
+    # the following lines put in bilinearity by hand
+    if isinstance(a,sp.Add):
+        return sum([pcom(x,b) for x in a.args])
+    elif isinstance(b,sp.Add):
+        return sum([pcom(a,x) for x in b.args])
+    elif isinstance(a,sp.Mul):
+        cf = sp.prod(a.args[:-1])
+        return pcom(a.args[-1],b)*cf
+    elif isinstance(b,sp.Mul):
+        cf = sp.prod(b.args[:-1])
+        return pcom(a,b.args[-1])*cf
+    elif isinstance(a,pstring) and isinstance(b,pstring):
+        if len(a.expr) != len(b.expr):
+            raise ValueError("Can't commutate Pauli strings of different lengths")
+        else:
+            return a*b - b*a
+    
 
 
 def LatDisp(matrix): # Convert each row of the matrix to its LaTeX representation
@@ -161,9 +216,6 @@ class pstring(sp.Symbol): # Pauli string class
         self.zs = self.ops.count("Z")
 
         self.counts = np.array([self.ids,self.xs,self.ys,self.zs])
-
-        
-            
         
     def __mul__(self, other): # multiplication of ops happens site-wise
         if isinstance(other, pstring): # if we are doing pauli string mat-mul,
@@ -174,9 +226,20 @@ class pstring(sp.Symbol): # Pauli string class
                 cf = np.prod([x if not isinstance(x,Pauli) else 1 for x in op.args])
                 const = const * cf
                 res += toLetter(op/cf)
+
+
             return const*pstring(res)
+        
+        elif isinstance(other,sp.Mul): # if multiplying by an expression
+            cf = sp.prod(other.args[:-1])
+            pstr = other.args[-1]
+            prod = pstr*self
+            return prod*cf
+
+        elif isinstance(other,sp.Add): # if multiplying an expression, distribute
+            return sum([super(pstring, self).__mul__(o) for o in other.args])
         else:
-            return super().__mul__(other) # otherwise inherit sympy mult
+            return super().__mul__(other) # otherwise inherit sympy multx
         
     def tp(self,other): # shorthand tensor product
         if isinstance(other,pstring):
@@ -195,26 +258,44 @@ class pstring(sp.Symbol): # Pauli string class
     
     def disp(self): # display nicely
         display(Latex('$'+lat(self)+'$'))
+ 
         
-        
+    
+
+
+
 class pSDP: # spin chain SDP class
     
     def __init__(self,basis_ops,N,Ham = None,v = False):
         
         self.N = N
 
+        # t = time()
         self.basis = constructBasis(basis_ops,N)
+        # tt = time()
+        # print('constructBasis time =',tt-t)
+        
+        self.withIdentity = ('I' in basis_ops)
+        if self.withIdentity:
+            self.L = len(basis_ops) - 1
+        else:
+            self.L = len(basis_ops)
         
         if v: print("Operator basis:"); LatDisp(self.basis.T)
         
         # Since the objects have algebra all multiplication/commute/anticommute is done here
+        # t = time()
         self.M = sp.Matrix(self.basis * self.basis.T)
+        # tt = time()
+        # print('find M time =',tt -t)
         
         if v: print("Correlation matrix:"); LatDisp(self.M)
         
+        # get initial set of dual variables
         self.all_vars = list(self.M.atoms(pstring))
         self.all_vars.remove(pID(self.N))
         
+        # t = time()
         # Group by ZN orbits
         self.orbits = []
         duals_set = set(self.all_vars)
@@ -228,29 +309,35 @@ class pSDP: # spin chain SDP class
                     duals_set.remove(y)  # Remove y from duals_set as it's already in orbit
             
             self.orbits.append(orbit)
-           
-                
+        # tt = time()
+        # print("orbits time =",tt-t)
 
         self.n_duals = len(self.orbits)
         if v: print("Number of dual variables:",self.n_duals)
 
+        self.reps = [x[0] for x in self.orbits] # class reps of each orbit
+
+        self.Hcom_ops = []
+
         self.solved = False
-        self.res = None
-        
-        
+
+        self.result = None
         
         # construct PSD in the dual perspective
-        rows,cols = self.M.shape
+        # t = time()
         self.Fmats = [np.zeros(self.M.shape,dtype = complex)]
-        for orbit in self.orbits:
-            cf = np.zeros((rows,cols),dtype = complex)
-            for x in orbit:
-                cf += getMcoeff(self.M,x)
-            self.Fmats.append(cf)
+        for representative in self.reps: # for each class representative
+            cf = np.zeros(self.M.shape,dtype = complex)
+            Q = getMcoeff(self.M,representative) # get single coeff 
+            revolved_Q = F_revolve(Q,self.N,self.L,self.withIdentity)
+            self.Fmats.append(revolved_Q)
 
         v = self.M.xreplace({a:0 for a in self.all_vars})
         v = v.xreplace({pID(N):1})
         self.Fmats[0] = np.array(v)
+
+        # tt = time()
+        # print("build Fmats time =",tt-t)
         
         self.c = np.zeros((self.n_duals)) # objective function-to-be
 
@@ -264,6 +351,11 @@ class pSDP: # spin chain SDP class
         
         full_ham_vars = [pstring(var.expr + ssum(Ilst(self.N-len(var.expr)))) for var in ham_vars]
         
+        self.fullH = 0
+        for n in range(self.N):
+            single_site_h = sum([proll(full_ham_vars[i],n)*cfs[i] for i in range(len(full_ham_vars))])
+            self.fullH += single_site_h
+
         all_ham_cfs = []
         
         for orbit in self.orbits:
@@ -278,14 +370,45 @@ class pSDP: # spin chain SDP class
             
         self.c = np.array(all_ham_cfs)
         return self.c
+
+    def add_Hcom_cnstr(self,op):
+        self.Hcom_ops.append(op)
+
+    def Hcom(self,newop):
+        if self.fullH == None:
+            print("ERROR: No Hamiltonian specified.")
+            return 0
+        current_ham = self.fullH
+        L = self.N
+        newop = pstring(newop + ssum(Ilst(L - len(newop))))
+        return sp.expand(-1j*pcom(current_ham,newop)) # factor of i for Hermiticity. Guarantees real coeffs for operators (?) NOT SURE IF ALWAYS TRUE
     
     def solve(self):
         x = cp.Variable(self.n_duals)
-
+        
         Fm = self.Fmats
         M = Fm[0] + sum([Fm[i+1]*x[i] for i in range(self.n_duals)])
         constraints = [M>>0]
 
+        for op in self.Hcom_ops: # add commutator constraints directly, if they are included
+            res = self.Hcom(op)
+            variables = list(res.atoms(pstring))
+            coeffs = res.as_coefficients_dict()
+            coeffs = [coeffs[var] for var in variables]
+            orbit_vars = []
+            for var in variables:
+                found = False
+                for i,orb in enumerate(self.orbits):
+                    if var in orb:
+                        orbit_vars.append(x[i])
+                        found = True
+                        continue
+            if found:
+                constraints += [sum([coeffs[i]*orbit_vars[i] for i in range(len(coeffs))]) == 0]
+            elif not found:
+                print("Not all operators in commutator constraint are contained in M")
+
+        # t = time()
         c = self.c
         objective = cp.Minimize(c.T @ x)
 
@@ -293,6 +416,9 @@ class pSDP: # spin chain SDP class
 
         result = sdp.solve(solver = cp.MOSEK,verbose = False)
         optimal = x.value
+        
+        # tt = time()
+        # print("solve SDP time =",tt-t)
 
         self.result = (result,optimal)
         self.solved = True
@@ -301,6 +427,8 @@ class pSDP: # spin chain SDP class
 
 
 if __name__ == '__main__':
+
+
     zz = pstring('ZZ')
     x = pstring('X')
 
@@ -311,7 +439,10 @@ if __name__ == '__main__':
     N = 8
 
     t = time()
-    yz = pSDP(['Y','Z'],N,Ham = h)
+    yz = pSDP(['I','X','Y','Z','XX','YY'],N,Ham = h)
+
+
+    # print(yz.Hcom('X'))
     # print(yz.basis)
     yz_res,_ = yz.solve()
     tt = time()
@@ -323,56 +454,7 @@ if __name__ == '__main__':
 
 # AUXILIARY STUFF
 
-################### 
-# ISING MODEL
 
-# Define Pauli matrices
-sigma_x = np.array([[0, 1], [1, 0]])
-sigma_z = np.array([[1, 0], [0, -1]]) 
-
-def Ising_Hamiltonian(N, mu): # for exact diagonalization
-    H = np.zeros((int(2**N), int(2**N)))
-    for i in range(N):
-        H_term = 1.0
-        for j in range(N):
-            if j == i:
-                H_term = np.kron(H_term, -mu * sigma_x)
-            else:
-                H_term = np.kron(H_term, np.eye(2))
-        H += H_term
-    for i in range(N):
-        H_term = 1.0
-        for j in range(N):
-            if j == i:
-                H_term = np.kron(H_term, -sigma_z)
-            elif j == (i + 1) % N:
-                H_term = np.kron(H_term, -sigma_z)
-            else:
-                H_term = np.kron(H_term, np.eye(2))
-        H += H_term
-    return H
-
-def Ising_exactD(N,mu): # exact diagonalization
-    H = Ising_Hamiltonian(N,mu)
-    eigenvalues, eigenvectors = eigh(H)
-    return eigenvalues[0]
-
-def Ising_analytical_solution(mu, k): # exact dispersion relation
-    return np.sqrt(1 + mu**2 - 2 * mu * np.cos(k))
-
-def Ising_analytical_GS(mu): # get exact ground state
-    integral, _ = quad(lambda k: Ising_analytical_solution(mu, k), 0, np.pi)
-    analytical_energy = -integral / np.pi
-    return analytical_energy
-
-def extrapolate_energy(N, a, b):
-    return a + b/N 
-    
-def largeNextrapolate(system_sizes,energies):
-    energies = [energies[i]/system_sizes[i] for i in range(len(energies))]
-    params, _ = curve_fit(extrapolate_energy, system_sizes, energies)
-    extrapolated_energy = params[0]
-    return extrapolated_energy
 
 def cleanUp(arr,tol = 1e-15): # make array presentable
     dec = int(-1*np.log10(tol))
