@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 from pauli_SDP_lib import *
+from exact_XY import *
 
 from scipy.stats import linregress
 
@@ -65,16 +66,57 @@ def getCorrelators(problem):
 	return corr_dict
 		
 def getCritExp(x,y,N = None):
-    if N == None:
-        reg = linregress(np.log(np.array(x)),np.log(np.array(y)))
-        return reg.slope*-1/2
-    else:
-        reg = linregress(np.log(np.sin(np.pi*np.array(x)/N)**2),np.log(np.abs(np.array(y))))
-        return reg.slope*-1
+	if N == None:
+		reg = linregress(np.log(np.array(x)),np.log(np.array(y)))
+		return reg.slope*-1/2
+	else:
+		reg = linregress(np.log(np.sin(np.pi*np.array(x)/N)**2),np.log(np.abs(np.array(y))))
+		return reg.slope*-1
 
 
+def Ising_corrCompare(prob,mu):
+	corrs = getCorrelators(prob)
+	N = prob.N
 
+	rv, XX = corrs['XX']
+	rv, YY = corrs['YY']
+	rv, ZZ = corrs['ZZ']
+	XXc = XX
+	YYc = YY
+	ZZc = ZZ - corrs['Z'][0]**2
 
+	exact_corrs = Ising_corrs(mu,N)
+	rv, iXX = exact_corrs['XX']
+	rv, iYY = exact_corrs['YY']
+	rv, iZZ = exact_corrs['ZZ']
+	iXXc = iXX
+	iYYc = iYY
+	iZZc = iZZ 
+
+	fig,ax = plt.subplots(1,3,figsize = (15,5))
+	x2,y2,z2 = ax
+
+	x2.plot(rv,XX,label = 'SDP')
+	x2.plot(rv,iXX,'k--',label = 'exact')
+	x2.legend()
+	x2.set_title(r"Correlator $\langle XX \rangle$; N = {}, $\mu = {}$".format(N,mu))
+	x2.set_ylabel(r"value of corr. func")
+	x2.set_xlabel(r"distance")
+
+	y2.plot(rv,YY,label = 'SDP')
+	y2.plot(rv,iYY,'k--',label = 'exact')
+	y2.legend()
+	y2.set_title(r"Correlator $\langle YY \rangle$; N = {}, $\mu = {}$".format(N,mu))
+	# y2.set_ylabel(r"value of corr. func")
+	y2.set_xlabel(r"distance")
+
+	z2.plot(rv,ZZc,label = 'SDP')
+	z2.plot(rv,iZZc,'k--',label = 'exact')
+	z2.legend()
+	z2.set_title(r"Correlator $\langle ZZ \rangle$; N = {}, $\mu = {}$".format(N,mu))
+	# z2.set_ylabel(r"value of corr. func")
+	z2.set_xlabel(r"distance")
+	plt.show()
 
 
 

@@ -35,18 +35,21 @@ def XY_exZ(h,gam,N):
     return -1*XY_GR(0,h,gam,N)
 
 def XY_exZZ(R,h,gam,N): # keep in mind this is the connected version
+    if R % N == 0 : return 1-XY_exZ(h,gam,N)**2
     return -1*XY_GR(R,h,gam,N)*XY_GR(-1*R,h,gam,N)
 
 def XY_exXX(R,h,gam,N):
+    if R % N == 0 : return 1
     row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n - np.arange(1,R+1))])
     mat = np.vstack([row(k) for k in range(R)])
 #     print(mat)
-    return np.linalg.det(mat)
+    return -1*np.linalg.det(mat)
 
 def XY_exYY(R,h,gam,N):
+    if R % N == 0 : return 1
     row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n + 2 - np.arange(1,R+1))])
     mat = np.vstack([row(k) for k in range(R)])
-    return np.linalg.det(mat)
+    return -1*np.linalg.det(mat)
 
 # in thermodynamic limit
 def XY_GS_thermo(h,gam):
@@ -80,7 +83,7 @@ def XY_exXX_thermo(R,h,gam):
 def XY_exYY_thermo(R,h,gam):
     row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n + 2 - np.arange(1,R+1))])
     mat = np.vstack([row(k) for k in range(R)])
-    return np.linalg.det(mat)
+    return -1*np.linalg.det(mat)
 
 def getCritExp(x,y,N = None):
     if N == None:
@@ -99,7 +102,7 @@ def Ising_corrs(h,N): # get exact correlation functions for all sites
     res['X'] = [0]
     res['Y'] = [0]
     res['Z'] = [XY_exZ(h,1,N)]
-    res['XX'] = (Rvals,np.abs(np.array([XY_exXX(r,h,1,N) for r in Rvals])))
+    res['XX'] = (Rvals,np.array([XY_exXX(r,h,1,N) for r in Rvals]))
     res['YY'] = (Rvals,np.array([XY_exYY(r,h,1,N) for r in Rvals]))
     res['ZZ'] = (Rvals,np.array([XY_exZZ(r,h,1,N) for r in Rvals]))
     return res
@@ -144,12 +147,12 @@ def Ising_analytical_GS(mu): # get exact ground state
     return analytical_energy
 
 def Ising_FSS_critGS(N,order = 2):
-	res = -4/np.pi
-	if order == 0: return res 
-	if order == 1:
-		return res - np.pi/(6*N**2)
-	if order == 2:
-		return res - np.pi/(6*N**2) - 7*np.pi**3/(1440*N**4)
+    res = -4/np.pi
+    if order == 0: return res 
+    if order == 1:
+        return res - np.pi/(6*N**2)
+    if order == 2:
+        return res - np.pi/(6*N**2) - 7*np.pi**3/(1440*N**4)
 
 
 # def extrapolate_energy(N, a, b):
