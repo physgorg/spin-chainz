@@ -7,7 +7,102 @@ from scipy.integrate import quad
 from scipy.stats import linregress
 
 ################### 
+# XY MODEL
+
+def omega(k,h,g):
+    if h == 1 and g == 1:
+        return np.sqrt(2-2*np.cos(k))
+    else:
+        return np.sqrt((h - np.cos(k))**2 + g**2*np.sin(k)**2)
+    
+def kmodes(N):
+    ns = np.arange(1,N/2 + 1)
+    ks = (2*ns - 1)*np.pi/N
+    return ks
+
+# Finite size version
+def XY_GS(h,gam,N):
+    k = kmodes(N)
+    return -2*np.sum(omega(k,h,gam))
+
+def XY_GR(R,h,g,N):
+    ks = kmodes(N)
+    summand = np.cos(ks*R)*(h - np.cos(ks))/omega(ks,h,g) - g*np.sin(ks*R)*np.sin(ks)/omega(ks,h,g)
+    summed = np.sum(summand)
+    return -2/N*summed
+
+def XY_exZ(h,gam,N):
+    return -1*XY_GR(0,h,gam,N)
+
+def XY_exZZ(R,h,gam,N): # keep in mind this is the connected version
+    return -1*XY_GR(R,h,gam,N)*XY_GR(-1*R,h,gam,N)
+
+def XY_exXX(R,h,gam,N):
+    row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n - np.arange(1,R+1))])
+    mat = np.vstack([row(k) for k in range(R)])
+#     print(mat)
+    return np.linalg.det(mat)
+
+def XY_exYY(R,h,gam,N):
+    row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n + 2 - np.arange(1,R+1))])
+    mat = np.vstack([row(k) for k in range(R)])
+    return np.linalg.det(mat)
+
+# in thermodynamic limit
+def XY_GS_thermo(h,gam):
+    integrand = lambda x: omega(x,h,gam)
+    res,err = quad(integrand,0,2*np.pi)
+    return -1/(2*np.pi)*res
+
+# MAGNETIZATION
+def XY_exZ_thermo(h,gam):
+    integrand = lambda x: (h - np.cos(x))/omega(x,h,gam)
+    res,err = quad(integrand,0,np.pi)
+    return 1/(np.pi)*res
+    
+# TWO POINT CORRELATORS
+def XY_GR_thermo(R,h,g):
+    integrand = lambda x: np.cos(x*R)*(h-np.cos(x))/omega(x,h,g) - g*np.sin(x*R)*np.sin(x)/omega(x,h,g)
+    res,err = quadrature(integrand,0,np.pi)
+    return -1/np.pi*res
+
+
+def XY_exZZ_thermo(R,h,gam): # keep in mind this is the connected version
+    return -1*XY_GR_thermo(R,h,gam)*XY_GR_thermo(-1*R,h,gam)
+
+
+def XY_exXX_thermo(R,h,gam):
+    row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n - np.arange(1,R+1))])
+    mat = np.vstack([row(k) for k in range(R)])
+    return -1*np.linalg.det(mat)
+
+
+def XY_exYY_thermo(R,h,gam):
+    row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n + 2 - np.arange(1,R+1))])
+    mat = np.vstack([row(k) for k in range(R)])
+    return np.linalg.det(mat)
+
+def getCritExp(x,y,N = None):
+    if N == None:
+        reg = linregress(np.log(np.array(x)),np.log(np.array(y)))
+        return reg.slope*-1/2
+    else:
+        reg = linregress(np.log(np.sin(np.pi*np.array(x)/N)**2),np.log(np.array(y)))
+        return reg.slope*-1
+    
+################### 
 # ISING MODEL
+
+def Ising_corrs(h,N): # get exact correlation functions for all sites
+    Rvals = np.arange(N+1) # distances from site
+    res = {}
+    res['X'] = [0]
+    res['Y'] = [0]
+    res['Z'] = [XY_exZ(h,1,N)]
+    res['XX'] = (Rvals,np.abs(np.array([XY_exXX(r,h,1,N) for r in Rvals])))
+    res['YY'] = (Rvals,np.array([XY_exYY(r,h,1,N) for r in Rvals]))
+    res['ZZ'] = (Rvals,np.array([XY_exZZ(r,h,1,N) for r in Rvals]))
+    return res
 
 # Define Pauli matrices
 sigma_x = np.array([[0, 1], [1, 0]])
@@ -57,11 +152,13 @@ def Ising_FSS_critGS(N,order = 2):
 		return res - np.pi/(6*N**2) - 7*np.pi**3/(1440*N**4)
 
 
-def extrapolate_energy(N, a, b):
-    return a + b/N 
+# def extrapolate_energy(N, a, b):
+#     return a + b/N 
     
-def largeNextrapolate(system_sizes,energies):
-    energies = [energies[i]/system_sizes[i] for i in range(len(energies))]
-    params, _ = curve_fit(extrapolate_energy, system_sizes, energies)
-    extrapolated_energy = params[0]
-    return extrapolated_energy
+# def largeNextrapolate(system_sizes,energies):
+#     energies = [energies[i]/system_sizes[i] for i in range(len(energies))]
+#     params, _ = curve_fit(extrapolate_energy, system_sizes, energies)
+#     extrapolated_energy = params[0]
+#     return extrapolated_energy
+
+
