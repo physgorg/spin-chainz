@@ -40,16 +40,17 @@ def XY_exZZ(R,h,gam,N): # keep in mind this is the connected version
 
 def XY_exXX(R,h,gam,N):
     if R % N == 0 : return 1
-    row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n - np.arange(1,R+1))])
+    # row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n - np.arange(1,R+1))])
+    row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n + 2 - np.arange(1,R+1))])
     mat = np.vstack([row(k) for k in range(R)])
-#     print(mat)
-    return -1*np.linalg.det(mat)
+    return np.linalg.det(mat)
 
 def XY_exYY(R,h,gam,N):
     if R % N == 0 : return 1
-    row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n + 2 - np.arange(1,R+1))])
+    # row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n + 2 - np.arange(1,R+1))])
+    row = lambda n: np.array([XY_GR(rr,h,gam,N) for rr in (n - np.arange(1,R+1))])
     mat = np.vstack([row(k) for k in range(R)])
-    return -1*np.linalg.det(mat)
+    return np.linalg.det(mat)
 
 # in thermodynamic limit
 def XY_GS_thermo(h,gam):
@@ -75,15 +76,17 @@ def XY_exZZ_thermo(R,h,gam): # keep in mind this is the connected version
 
 
 def XY_exXX_thermo(R,h,gam):
-    row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n - np.arange(1,R+1))])
+    row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n + 2 - np.arange(1,R+1))])
+    # row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n - np.arange(1,R+1))]) OLD
     mat = np.vstack([row(k) for k in range(R)])
-    return -1*np.linalg.det(mat)
+    return np.linalg.det(mat)
 
 
 def XY_exYY_thermo(R,h,gam):
-    row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n + 2 - np.arange(1,R+1))])
+    row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n - np.arange(1,R+1))])
+    # row = lambda n: np.array([XY_GR_thermo(rr,h,gam) for rr in (n + 2 - np.arange(1,R+1))]) OLD
     mat = np.vstack([row(k) for k in range(R)])
-    return -1*np.linalg.det(mat)
+    return np.linalg.det(mat)
 
 def getCritExp(x,y,N = None):
     if N == None:
@@ -163,5 +166,7 @@ def Ising_FSS_critGS(N,order = 2):
 #     params, _ = curve_fit(extrapolate_energy, system_sizes, energies)
 #     extrapolated_energy = params[0]
 #     return extrapolated_energy
+if __name__ == '__main__':
 
+    XY_exXX(5,1,1,8)
 

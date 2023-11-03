@@ -97,14 +97,14 @@ def Ising_corrCompare(prob,mu):
 	x2,y2,z2 = ax
 
 	x2.plot(rv,XX,label = 'SDP')
-	x2.plot(rv,iXX,'k--',label = 'exact')
+	x2.plot(rv,iXXc,'k--',label = 'exact')
 	x2.legend()
 	x2.set_title(r"Correlator $\langle XX \rangle$; N = {}, $\mu = {}$".format(N,mu))
 	x2.set_ylabel(r"value of corr. func")
 	x2.set_xlabel(r"distance")
 
 	y2.plot(rv,YY,label = 'SDP')
-	y2.plot(rv,iYY,'k--',label = 'exact')
+	y2.plot(rv,iYYc,'k--',label = 'exact')
 	y2.legend()
 	y2.set_title(r"Correlator $\langle YY \rangle$; N = {}, $\mu = {}$".format(N,mu))
 	# y2.set_ylabel(r"value of corr. func")
@@ -129,29 +129,35 @@ def Ising_corrCompare(prob,mu):
 
 if __name__ == '__main__':
 	
-	zz = pstring('ZZ')
-	x = pstring('X')
+	xx = pstring('XX')
+	z = pstring('Z')
 
 	mu = 1
 
-	h = -1*zz - mu*x
+	h = -1*xx - mu*z
 
 	N = 8
-
 	t = time()
-	yz = pSDP(['X','Y','Z'],N,Ham = h)
-	yz_res,_ = yz.solve()
+	prob = pSDP(['I','X','Y','Z','XY','XZ'],N,Ham = h)
+
+	prob.add_Hcom_cnstr('X')
+	prob.add_Hcom_cnstr('Y')
+	prob.add_Hcom_cnstr('Z')
+
+	res,opt = prob.solve()
 	tt = time()
 
-	print("yz time",tt-t)
-	print('yz res',yz_res)
+	print("time",tt-t)
+	print('SDP result',res)
 
-	t = time()
-	corrs = getCorrelators(yz)
-	tt = time()
-	print('corr time',tt-t)
-	print("CORRELATORS")
-	for x in corrs:
-		print(x,corrs[x])
+	exact = XY_GS(mu,1,N)
+
+
+
+	print('exact:',exact)
+
+	print('percent error:',100*abs((exact - res)/exact))
+
+	Ising_corrCompare(prob,mu)
 
 	
