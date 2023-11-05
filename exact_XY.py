@@ -88,13 +88,7 @@ def XY_exYY_thermo(R,h,gam):
     mat = np.vstack([row(k) for k in range(R)])
     return np.linalg.det(mat)
 
-def getCritExp(x,y,N = None):
-    if N == None:
-        reg = linregress(np.log(np.array(x)),np.log(np.array(y)))
-        return reg.slope*-1/2
-    else:
-        reg = linregress(np.log(np.sin(np.pi*np.array(x)/N)**2),np.log(np.array(y)))
-        return reg.slope*-1
+
     
 ################### 
 # ISING MODEL

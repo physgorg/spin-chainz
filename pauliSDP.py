@@ -3,6 +3,8 @@ from time import time
 import cvxpy as cp
 import matplotlib.pyplot as plt
 
+from exact_XY import *
+
 ################################################
 # FUNCTIONS
 
@@ -65,6 +67,108 @@ def constructBasis(oplist,n_sites):
     else:
         return operators
 
+def getCorrelators(problem):
+    N = problem.N
+    if not problem.solved: # solve problem if not already
+        problem.solve()
+    energy,xvec = problem.result # optimal values
+    ops = np.array(problem.duals) # all ops w/ unique value
+    
+    short_ops = np.array([x.replace('I','') for x in ops])
+    sym_corrs = list(np.unique(short_ops)) # find which types of correlators we have
+    corr_dict = {}
+    for corr in sym_corrs: # for each type of correlator,
+        
+        inds = np.where((short_ops == corr) | (short_ops == corr[::-1]))#
+
+        v = ops[inds] # get corresponding pstrings
+        x = xvec[inds] # get optimal values
+
+        if len(corr) == 1: # if a one-point func,
+            corr_dict[corr] = [xvec[inds][0]] # just put the value
+            
+        elif len(corr) == 2: # if a two-point func,
+            dr = np.arange(N+1)
+            vals = np.zeros((N+1))
+            o1,o2 = corr[0],corr[1]
+                                    
+            # compute the onsite product explicitly
+            prod = pstr(o1)*pstr(o2)
+            if prod.expr == 'I': # if they are idem,
+                vals[0] = 1
+                vals[N] = 1
+            else: # otherwise they multiply to something we already have
+                vals[0] = None
+                vals[N] = None
+                
+            dists = [op.index(o2)-op.rfind(o1) for op in v]
+            d1 = [d % N for d in dists] # find distances mod N
+            d2 = [abs(d) for d in dists]
+            vals[d1] = x
+            vals[d2] = x
+
+            if corr[::-1] not in list(corr_dict.keys()):
+                corr_dict[corr]= (dr,vals)
+        else:
+            corr_dict[corr] = (x,v)
+        
+    return corr_dict
+
+def getCritExp(x,y,N = None,cutoff = 1):
+	x = x[cutoff:-cutoff]
+	y = y[cutoff:-cutoff]
+    if N == None:
+        reg = linregress(np.log(np.array(x)),np.log(np.array(y)))
+        return reg.slope*-1/2
+    else:
+        reg = linregress(np.log(np.sin(np.pi*np.array(x)/N)**2),np.log(np.abs(np.array(y))))
+        return reg.slope*-1
+
+
+def Ising_corrCompare(prob,mu):
+    corrs = getCorrelators(prob)
+    N = prob.N
+
+    rv, XX = corrs['XX']
+    rv, YY = corrs['YY']
+    rv, ZZ = corrs['ZZ']
+    XXc = XX
+    YYc = YY
+    ZZc = ZZ - corrs['Z'][0]**2
+
+    exact_corrs = Ising_corrs(mu,N)
+    rv, iXX = exact_corrs['XX']
+    rv, iYY = exact_corrs['YY']
+    rv, iZZ = exact_corrs['ZZ']
+    iXXc = iXX
+    iYYc = iYY
+    iZZc = iZZ 
+
+    fig,ax = plt.subplots(1,3,figsize = (15,5))
+    x2,y2,z2 = ax
+
+    x2.plot(rv,XX,label = 'SDP')
+    x2.plot(rv,iXXc,'k--',label = 'exact')
+    x2.legend()
+    x2.set_title(r"Correlator $\langle XX \rangle$; N = {}, $\mu = {}$".format(N,mu))
+    x2.set_ylabel(r"value of corr. func")
+    x2.set_xlabel(r"distance")
+
+    y2.plot(rv,YY,label = 'SDP')
+    y2.plot(rv,iYYc,'k--',label = 'exact')
+    y2.legend()
+    y2.set_title(r"Correlator $\langle YY \rangle$; N = {}, $\mu = {}$".format(N,mu))
+    # y2.set_ylabel(r"value of corr. func")
+    y2.set_xlabel(r"distance")
+
+    z2.plot(rv,ZZc,label = 'SDP')
+    z2.plot(rv,iZZc,'k--',label = 'exact')
+    z2.legend()
+    z2.set_title(r"Correlator $\langle ZZ \rangle$; N = {}, $\mu = {}$".format(N,mu))
+    # z2.set_ylabel(r"value of corr. func")
+    z2.set_xlabel(r"distance")
+    plt.show()
+
 ##################################################
 # CLASSES
 
@@ -105,10 +209,10 @@ class pauliSDP: # spin chain SDP class
         
         self.N = N # number of sites
 
-        t = time()
+        # t = time()
         self.basis = constructBasis(basis_ops,N)
-        tt = time()
-        print('constructBasis time =',tt-t)
+        # tt = time()
+        # print('constructBasis time =',tt-t)
         
         self.withIdentity = ('I' in basis_ops)
         if self.withIdentity:
@@ -123,7 +227,7 @@ class pauliSDP: # spin chain SDP class
         if v: print("Operator basis:"); print(self.basis)
         
         # Since the objects have algebra all multiplication/commute/anticommute is done here
-        t = time()
+        # t = time()
         self.duals = []
         self.dual_hashes = []
         self.Fmats = {}
@@ -141,8 +245,8 @@ class pauliSDP: # spin chain SDP class
                     self.Fmats[hash_val][i,j] = coeff
                 elif hash_val in self.Fmats.keys():
                     self.Fmats[hash_val][i,j] = coeff
-        tt = time()     
-        print('find M, Fmats time =',tt -t)
+        # tt = time()     
+        # print('find M, Fmats time =',tt -t)
         
         self.n_duals = len(self.duals) # identity does not count as a dual
         
@@ -176,7 +280,7 @@ class pauliSDP: # spin chain SDP class
         M = Fm[self.idhash] + sum([Fm[self.dual_hashes[i]]*x[i] for i in range(self.n_duals)])
         constraints = [M>>0]
 
-        t = time()
+        # t = time()
         c = self.c
         objective = cp.Minimize(c.T @ x)
 
@@ -190,8 +294,8 @@ class pauliSDP: # spin chain SDP class
         self.result = (result,optimal)
         self.solved = True
 
-        tt = time()
-        print('solve time',tt-t)
+        # tt = time()
+        # print('solve time',tt-t)
 
         return result,optimal
 
@@ -238,4 +342,4 @@ if __name__ == '__main__':
 
 
 
-	
+
