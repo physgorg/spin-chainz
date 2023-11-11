@@ -84,6 +84,36 @@ def constructBasis(oplist,n_sites):
 			for x in range(oplen):
 				basis_op[(j+x) % N] = ssite_op[x]
 			operators.append(ssum(basis_op))
+	print(operators)
+	operators = [pstr(x) for x in operators]
+	if withIdentity: 
+		return [pstr(ssum(Ilst(N)))] + operators
+	else:
+		return operators
+
+def constructAnchorBasis(oplist,n_sites):
+	ops = [x for x in oplist if x != 'I']
+	N = n_sites
+	operators = []
+	if 'I' in oplist:
+		withIdentity = True
+	else:
+		withIdentity = False
+	L = len(ops)
+	for i in range(L): # operator index
+		ssite_op = list(ops[i])
+		oplen = len(ssite_op)
+		if oplen <= 1: # don't anchor 1pt operators in basis
+			for j in range(N): # site index
+				basis_op = Ilst(N)
+				for x in range(oplen):
+					basis_op[(j+x) % N] = ssite_op[x]
+				operators.append(ssum(basis_op))
+		else: # only include these at a specific site
+			basis_op = Ilst(N)
+			for x in range(oplen):
+				basis_op[x % N] = ssite_op[x]
+			operators.append(ssum(basis_op))
 	operators = [pstr(x) for x in operators]
 	if withIdentity: 
 		return [pstr(ssum(Ilst(N)))] + operators
@@ -418,7 +448,6 @@ class pauliSDP: # spin chain SDP class
 				constraints += [sum([xvar[cnstr_vars[i]]*cnstr_cfs[i] for i in range(len(cnstr_vars))]) == 0]
 			except ValueError:
 				continue
-		
 
 		tt = time()
 		print("Hcom op time",tt-t)
@@ -455,15 +484,15 @@ if __name__ == '__main__':
 	bas = ['I','X','Y','Z','XX','YY','ZZ']
 
 	t1 = time()
-	prob = pauliSDP(bas,N,Ham = -1*xx - z)
+	prob = pauliSDP(bas,N,Ham = -1*xx - z,anchored = True)
 
-	prob.add_Hcom('ZZ')
-	prob.add_Hcom('XX')
-	prob.add_Hcom('YY')
-	prob.add_Hcom('X')
-	prob.add_Hcom('Y')
-	prob.add_Hcom('Z')
-	prob.add_Hcom('XY')
+	prob.add_Hcom(bas[1:])
+	# prob.add_Hcom('XX')
+	# prob.add_Hcom('YY')
+	# prob.add_Hcom('X')
+	# prob.add_Hcom('Y')
+	# prob.add_Hcom('Z')
+	# prob.add_Hcom('XY')
 
 	# prob.constraints
 
