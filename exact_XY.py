@@ -3,7 +3,7 @@ import numpy as np
 
 from scipy.sparse import kron, identity
 from scipy.linalg import eigh
-from scipy.integrate import quad
+from scipy.integrate import quad,quadrature
 from scipy.stats import linregress
 
 ################### 
@@ -67,7 +67,7 @@ def XY_exZ_thermo(h,gam):
 # TWO POINT CORRELATORS
 def XY_GR_thermo(R,h,g):
     integrand = lambda x: np.cos(x*R)*(h-np.cos(x))/omega(x,h,g) - g*np.sin(x*R)*np.sin(x)/omega(x,h,g)
-    res,err = quadrature(integrand,0,np.pi)
+    res,err = quad(integrand,0,np.pi)
     return -1/np.pi*res
 
 
@@ -162,5 +162,5 @@ def Ising_FSS_critGS(N,order = 2):
 #     return extrapolated_energy
 if __name__ == '__main__':
 
-    XY_exXX(5,1,1,8)
+    print(XY_GS(1,1,20)/20)
 
