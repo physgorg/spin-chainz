@@ -138,8 +138,8 @@ def getCritExp(x,y,N = None,cutoff = 3):
 		reg = linregress(np.log(np.sin(np.pi*np.array(x)/N)**2),np.log(np.abs(np.array(y))))
 		return reg.slope*-1
 
-def Ising_corrCompare(prob,mu,title = None): # compare correlation functions to exact (finite-size) Ising solution
-	corrs = getCorrelators(prob)
+def Ising_corrCompare(prob,gam=1,mu=1,title = None): # compare correlation functions to exact (finite-size) Ising solution
+	corrs = prob.get_corrs()
 	N = prob.N
 
 	rv, XX = corrs['XX']
@@ -147,15 +147,21 @@ def Ising_corrCompare(prob,mu,title = None): # compare correlation functions to 
 	rv, ZZ = corrs['ZZ']
 	XXc = XX
 	YYc = YY
-	ZZc = ZZ - corrs['Z'][0]**2
+	ZZc = ZZ - corrs['Z']**2
 
-	exact_corrs = Ising_corrs(mu,N)
+	exact_corrs = Ising_corrs(mu,gam,N)
 	rv, iXX = exact_corrs['XX']
 	rv, iYY = exact_corrs['YY']
 	rv, iZZ = exact_corrs['ZZ']
 	iXXc = iXX
 	iYYc = iYY
 	iZZc = iZZ 
+
+	sdp_exp = getCritExp(rv,XX,N)
+	exact_exp = getCritExp(rv,iXX,N)
+
+	print("XX critical exponent (SDP):",sdp_exp)
+	print("XX critical exponent (exact):",exact_exp)
 
 	fig,ax = plt.subplots(1,3,figsize = (15,5))
 	x2,y2,z2 = ax
@@ -361,11 +367,11 @@ class pauliSDP: # spin chain SDP class
 				
 				elem = self.basis[i]*self.basis[j] # main multiplication step here
 
-				for k in range(elem.n):
-					coeff = elem.cfs[k]
-					op = elem.expr[k]
-					xv = elem.x[k]
-					hash_val = pOp_hash(op,xv,N = N)
+				for k in range(elem.n): # elem = 2X(n)Z(m)
+					coeff = elem.cfs[k] # 2
+					op = elem.expr[k] # 'XZ'
+					xv = elem.x[k] # [n,m]
+					hash_val = pOp_hash(op,xv,N = N) # 'X0.Zm-n.' 'U,P,V,X' "U0.P1.V3..."
 					if hash_val not in self.Fmats.keys(): # if we have not got this variable yet
 						if hash_val != self.idhash:
 							self.duals.append(pOp(op,xv))
@@ -476,14 +482,14 @@ class pauliSDP: # spin chain SDP class
 			redun1 = [] # keep track of constraints to avoid redundancy
 			redun2 = []
 			for op in self.basis[1:]:
-				commed = com(self.full_ham,op)
+				commed = com(self.full_ham,op) # add <[H,O]> = 0 constraints
 				ax,b = self.gen_cnstr(commed)
 				lax = ax.tolist()
 				if lax not in redun1:
-					constraints += [ax.T @ xvar == b] # add <[H,O]> = 0 constraints
+					constraints += [ax.T @ xvar == b] 
 					redun1.append(lax)
 
-				mult = op*commed
+				mult = op*commed # add <O[H,O]> >= 0 constraints
 				mult = pOp(mult.expr,mult.x,coeffs = [np.real(cf) for cf in mult.cfs])
 				ax,b = self.gen_cnstr(mult,real = True)
 				lax = ax.tolist()
