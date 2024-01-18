@@ -34,6 +34,33 @@ def scf(x):
 	elif np.real(x)<0:
 		return ' - '+str(-1*x)
 
+def hhash(pop):
+	return pOp_hash(pop.expr[0],pop.x[0])
+
+def topop(repn):
+	coords = [i for i in range(len(repn)) if repn[i] != 'I']
+	expr = repn.replace('I','')
+	return pOp(expr,coords)
+
+
+def ppp(hashval):
+	ops = hashval.split('.')
+	expr = ''.join([x[0] for x in ops])
+	coords = [int(x[1:]) for x in ops]
+	return pOp(expr,coords)
+
+def pOp_hash(expr,x):
+	if len(expr) == 0:
+		return 'I'
+	zero = x[0]
+	s = ''
+	for i in range(len(expr)):
+		if i == 0:
+			s += expr[i]+str(x[i] - zero) # this makes the hash automatically 1-periodic
+		else:
+			s += '.'+expr[i]+str(x[i] - zero)
+	return s
+
 def pOp_normalOrder(new_expr,coords): # multiply out a matmul string of paulis
 	product = ''
 	new_coords = []
@@ -63,6 +90,52 @@ def pOp_normalOrder(new_expr,coords): # multiply out a matmul string of paulis
 		
 	return product,new_coords,new_coeff
 
+
+def getCorrelators(problem):
+    if not problem.solved: # solve problem if not already
+        problem.solve()
+    energy,xvec = problem.result # optimal values
+    ops = np.array(problem.dual_hashes) # all ops w/ unique value
+#     print(ops)
+    # short_ops = np.array([x.replace('I','') for x in ops])
+    # sym_corrs = list(np.unique(short_ops)) # find which types of correlators we have
+    corr_dict = {}
+    for i,op in enumerate(ops): # for each type of correlator,
+
+        # inds = np.where((short_ops == corr) | (short_ops == corr[::-1]))#
+#         print(corr_dict)
+        bits = op.split('.')
+#         print(bits)
+        v = [x[0] for x in bits]
+        key = ssum(v)
+#         print(op,xvec[i])
+        c = [int(x[1:]) for x in bits]
+        # print('c',c)
+#         print(key)
+        if len(v) == 1: # if a one-point func,
+            corr_dict[key] = [xvec[i]] # just put the value        
+
+        elif len(v) == 2 and v[0] == v[1]: # if a two-point func,
+            if key not in corr_dict.keys():
+#                 print('new key',key)
+                
+                corr_dict[key] = {abs(c[1]-c[0]):xvec[i]}
+            else:
+                corr_dict[key][abs(c[1]-c[0])] = xvec[i]
+#                 print('c',c)
+#                 corr_dict[key][1].append()
+        elif len(v) == 3:
+            continue
+#     print(corr_dict.keys())
+    for key in corr_dict.keys():
+        if len(key) == 2:
+#             print(key)
+            subdict = corr_dict[key]
+            vals = np.sort(list(subdict.keys()))
+            arr = [subdict[val] for val in vals]
+            corr_dict[key] = (vals,arr)
+        
+    return corr_dict
 
 
 ##################################################
@@ -189,72 +262,69 @@ class pOp: # pauli operators (pstring equivalent)
 
 class oo_pauliSDP: # spin chain SDP class
 
-    def __init__(self,basis_ops,Ham = None,v = False,anchored = False,timed = False):
+	def __init__(self,basis_ops,Ham = None,v = False,anchored = False,timed = False):
 
-        self.timed = timed
+		self.timed = timed
 
-        self.basis = [pOp('I',0)] + basis_ops # for now, always include identity
-    
-        self.Mshape = (len(self.basis),len(self.basis))
+		self.basis = [pOp('I',0)] + basis_ops # for now, always include identity
+	
+		self.Mshape = (len(self.basis),len(self.basis))
 
-#         self.idhash = cyclic_hash(ssum(Ilst(N)))
+		if v: print("Operator basis:"); print(self.basis)
 
-        if v: print("Operator basis:"); print(self.basis)
+		# Since the objects have algebra all multiplication/commute/anticommute is done here
+		t = time()
+		self.duals = []
+		self.dual_hashes = []
+		self.Fmats = {}
+		for i in range(len(self.basis)):
+			for j in range(i,len(self.basis)):
+				
+				elem = self.basis[i]*self.basis[j] # main multiplication step here
+				
+				for k in range(elem.n):
+					coeff = elem.cfs[k]
+					op = elem.expr[k]
+					xv = elem.x[k]
+					hash_val = pOp_hash(op,xv)
+					if hash_val not in self.Fmats.keys(): # if we have not got this variable yet
+						if hash_val != 'I':
+							self.duals.append(elem)
+							self.dual_hashes.append(hash_val)
+						self.Fmats[hash_val] = np.zeros(self.Mshape,dtype = complex)
+						self.Fmats[hash_val][i,j] = coeff
+						self.Fmats[hash_val][j,i] = np.conj(coeff)
+					elif hash_val in self.Fmats.keys():
+						self.Fmats[hash_val][i,j] = coeff
+						self.Fmats[hash_val][j,i] = np.conj(coeff)
+		tt = time()     
+		if timed: print('find M, Fmats time =',tt -t)
 
-        # Since the objects have algebra all multiplication/commute/anticommute is done here
-        t = time()
-        self.duals = []
-        self.dual_hashes = []
-        self.Fmats = {}
-        for i in range(len(self.basis)):
-            for j in range(i,len(self.basis)):
-                
-                elem = self.basis[i]*self.basis[j] # main multiplication step here
-                
-                for k in range(elem.n):
-                    coeff = elem.cfs[k]
-                    op = elem.expr[k]
-                    xv = elem.x[k]
-                    hash_val = pOp_hash(op,xv)
-                    if hash_val not in self.Fmats.keys(): # if we have not got this variable yet
-                        if hash_val != 'I':
-                            self.duals.append(elem)
-                            self.dual_hashes.append(hash_val)
-                        self.Fmats[hash_val] = np.zeros(self.Mshape,dtype = complex)
-                        self.Fmats[hash_val][i,j] = coeff
-                        self.Fmats[hash_val][j,i] = np.conj(coeff)
-                    elif hash_val in self.Fmats.keys():
-                        self.Fmats[hash_val][i,j] = coeff
-                        self.Fmats[hash_val][j,i] = np.conj(coeff)
-        tt = time()     
-        if timed: print('find M, Fmats time =',tt -t)
+		self.n_duals = len(self.duals) # identity does not count as a dual
 
-        self.n_duals = len(self.duals) # identity does not count as a dual
+		self.Hcom_ops = []
 
-        self.Hcom_ops = []
+		self.solved = False
+		self.v = v
 
-        self.solved = False
-        self.v = v
+		self.result = None
 
-        self.result = None
+		self.c = np.zeros((self.n_duals)) # objective function-to-be
 
-        self.c = np.zeros((self.n_duals)) # objective function-to-be
+		if Ham != None:
+			self.full_ham = self.H(Ham)
 
-        if Ham != None:
-            self.full_ham = self.H(Ham)
-
-    def H(self,h):
-        t = time()
-        hashd = {pOp_hash(h.expr[i],h.x[i]):h.cfs[i] for i in range(h.n)}
-        print(hashd)
-        for i,hsh in enumerate(self.dual_hashes):
-            try:
-                self.c[i] += hashd[hsh]
-            except KeyError:
-                continue
-        tt = time()
-        if self.timed: print("ham time",tt-t)
-        return [h,hashd]
+	def H(self,h):
+		t = time()
+		hashd = {pOp_hash(h.expr[i],h.x[i]):h.cfs[i] for i in range(h.n)}
+		for i,hsh in enumerate(self.dual_hashes):
+			try:
+				self.c[i] += hashd[hsh]
+			except KeyError:
+				continue
+		tt = time()
+		if self.timed: print("ham time",tt-t)
+		return [h,hashd]
 
 	#     def add_Hcom(self,op):
 	#         if isinstance(op,list):
@@ -264,16 +334,16 @@ class oo_pauliSDP: # spin chain SDP class
 	#             self.Hcom_ops.append(pstr(op))
 
 
-    def solve(self):
-        xvar = cp.Variable(self.n_duals)
+	def solve(self):
+		xvar = cp.Variable(self.n_duals)
 
-        Fm = self.Fmats
+		Fm = self.Fmats
 
-        M = Fm['I'] + sum([Fm[self.dual_hashes[i]]*xvar[i] for i in range(self.n_duals)])
-        constraints = [M>>0]
+		M = Fm['I'] + sum([Fm[self.dual_hashes[i]]*xvar[i] for i in range(self.n_duals)])
+		constraints = [M>>0]
 
-        t = time()
-	        # add commutator constraints
+		t = time()
+			# add commutator constraints
 	#         Hops,hash_dict = self.full_ham
 	#         for op in self.Hcom_ops:
 	#             op = pstr(Ifill(op.expr,self.N))
@@ -291,26 +361,104 @@ class oo_pauliSDP: # spin chain SDP class
 	#             except ValueError:
 	#                 continue
 
-        tt = time()
-        if self.timed: print("Hcom op time",tt-t)
-        t = time()
+		tt = time()
+		if self.timed: print("Hcom op time",tt-t)
+		t = time()
 
-        c = self.c
-        objective = cp.Minimize(c.T @ xvar)
+		c = self.c
+		objective = cp.Minimize(c.T @ xvar)
 
-        sdp = cp.Problem(objective,constraints)
+		sdp = cp.Problem(objective,constraints)
 
-        result = sdp.solve(solver = cp.MOSEK,verbose = False)
-        optimal = xvar.value
+		result = sdp.solve(solver = cp.MOSEK,verbose = False)
+		optimal = xvar.value
 
-        self.result = (result,optimal)
-        if self.v: print("Result:",result)
-        self.solved = True
+		self.result = (result,optimal)
+		if self.v: print("Result:",result)
+		self.solved = True
 
-        tt = time()
-        if self.timed: print('solve time',tt-t)
+		tt = time()
+		if self.timed: print('solve time',tt-t)
 
-        return result,optimal			
+		return result,optimal
+
+	def fixedE_solve(self,energy,obj_c,sense = 'min'):
+		xvar = cp.Variable(self.n_duals)
+
+
+		Fm = self.Fmats
+
+		M = Fm['I'] + sum([Fm[self.dual_hashes[i]]*xvar[i] for i in range(self.n_duals)])
+		constraints = [M>>0]
+
+		t = time()
+
+		tt = time()
+		if self.timed: print("Hcom op time",tt-t)
+		t = time()
+
+		# fix the energy
+		constraints += [(self.c.T @ xvar) == energy]
+
+		if sense == 'min':
+			objective = cp.Minimize(obj_c.T @ xvar)
+		elif sense == 'max':
+			objective = cp.Maximize(obj_c.T @ xvar)
+
+		sdp = cp.Problem(objective,constraints)
+
+		result = sdp.solve(verbose = False)
+		optimal = xvar.value
+
+		self.result = (result,optimal)
+		if self.v: print("Result:",result)
+		self.solved = True
+
+		tt = time()
+		if self.timed: print('solve time',tt-t)
+
+		return result,optimal
+
+	def slackSolve(self,energy):
+
+		xvar = cp.Variable(self.n_duals)
+
+		t = cp.Variable()
+
+		Fm = self.Fmats
+
+		M = Fm['I'] + sum([Fm[self.dual_hashes[i]]*xvar[i] for i in range(self.n_duals)])
+		iden = np.identity(M.shape[0])
+		constraints = [(M-t*iden)>>0]
+
+		t = time()
+
+		tt = time()
+		if self.timed: print("Hcom op time",tt-t)
+		t = time()
+
+		# fix the energy
+		constraints += [(self.c.T @ xvar) == energy]
+
+		objective = cp.Maximize(t)
+			# objective = cp.Minimize(obj_c.T @ xvar)
+		
+			# objective = cp.Maximize(obj_c.T @ xvar)
+
+		sdp = cp.Problem(objective,constraints)
+
+		result = sdp.solve(verbose = False)
+		optimal = xvar.value
+
+		self.result = (result,optimal)
+		if self.v: print("Result:",result)
+		self.solved = True
+
+		tt = time()
+		if self.timed: print('solve time',tt-t)
+
+		return result,optimal
+
 
 
 if __name__ == '__main__':
