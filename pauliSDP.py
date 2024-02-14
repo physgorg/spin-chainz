@@ -139,7 +139,7 @@ def getCritExp(x,y,N = None,cutoff = 3):
 		return reg.slope*-1
 
 def Ising_corrCompare(prob,mu,title = None): # compare correlation functions to exact (finite-size) Ising solution
-	corrs = getCorrelators(prob)
+	corrs = prob.get_corrs()
 	N = prob.N
 
 	rv, XX = corrs['XX']
@@ -147,7 +147,7 @@ def Ising_corrCompare(prob,mu,title = None): # compare correlation functions to 
 	rv, ZZ = corrs['ZZ']
 	XXc = XX
 	YYc = YY
-	ZZc = ZZ - corrs['Z'][0]**2
+	ZZc = ZZ - corrs['Z']**2
 
 	exact_corrs = Ising_corrs(mu,N)
 	rv, iXX = exact_corrs['XX']
@@ -312,6 +312,9 @@ class pOp: # pauli operators (pstring equivalent)
 		for i in range(self.n):
 			res.append(pOp(self.expr[i],self.x[i])*self.cfs[i])
 		return res
+
+	def conj(self):
+		return pOp(self.expr,self.x,[np.conj(cf) for cf in self.cfs])
 
 class pauliSDP: # spin chain SDP class
 
