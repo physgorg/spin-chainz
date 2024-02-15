@@ -9,6 +9,8 @@ from scipy.stats import linregress
 ################### 
 # XY MODEL
 
+# H = -1/2(1+g)XX - 1/2(1-g)YY - hZ
+
 def omega(k,h,g):
     if h == 1 and g == 1:
         return np.sqrt(2-2*np.cos(k))
@@ -88,6 +90,21 @@ def XY_exYY_thermo(R,h,gam):
     mat = np.vstack([row(k) for k in range(R)])
     return np.linalg.det(mat)
 
+def XY_corrs(R,h,gam,N):
+	res = {}
+	res['XX'] = np.array([XY_exXX(r,h,gam,N) for r in np.array(R)])
+	res['YY'] = np.array([XY_exYY(r,h,gam,N) for r in np.array(R)])
+	res['ZZ'] = np.array([XY_exZZ(r,h,gam,N) for r in np.array(R)])
+	return res
+
+def XY_getCorrs(name,R,h,gam,N):
+	if name == 'XX':
+		return np.array([XY_exXX(r,h,gam,N) for r in np.array(R)])
+	if name == 'YY':
+		return np.array([XY_exYY(r,h,gam,N) for r in np.array(R)])
+	if name == 'ZZ':
+		return np.array([XY_exZZ(r,h,gam,N) for r in np.array(R)])
+
 
     
 ################### 
@@ -151,15 +168,6 @@ def Ising_FSS_critGS(N,order = 2):
     if order == 2:
         return res - np.pi/(6*N**2) - 7*np.pi**3/(1440*N**4)
 
-
-# def extrapolate_energy(N, a, b):
-#     return a + b/N 
-    
-# def largeNextrapolate(system_sizes,energies):
-#     energies = [energies[i]/system_sizes[i] for i in range(len(energies))]
-#     params, _ = curve_fit(extrapolate_energy, system_sizes, energies)
-#     extrapolated_energy = params[0]
-#     return extrapolated_energy
 if __name__ == '__main__':
 
     print(XY_GS(1,1,20)/20)
