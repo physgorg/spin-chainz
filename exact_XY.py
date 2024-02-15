@@ -110,15 +110,15 @@ def XY_getCorrs(name,R,h,gam,N):
 ################### 
 # ISING MODEL
 
-def Ising_corrs(h,N): # get exact correlation functions for all sites
+def Ising_corrs(h,gam,N): # get exact correlation functions for all sites
     Rvals = np.arange(N+1) # distances from site
     res = {}
     res['X'] = [0]
     res['Y'] = [0]
-    res['Z'] = [XY_exZ(h,1,N)]
-    res['XX'] = (Rvals,np.array([XY_exXX(r,h,1,N) for r in Rvals]))
-    res['YY'] = (Rvals,np.array([XY_exYY(r,h,1,N) for r in Rvals]))
-    res['ZZ'] = (Rvals,np.array([XY_exZZ(r,h,1,N) for r in Rvals]))
+    res['Z'] = [XY_exZ(h,gam,N)]
+    res['XX'] = (Rvals,np.array([XY_exXX(r,h,gam,N) for r in Rvals]))
+    res['YY'] = (Rvals,np.array([XY_exYY(r,h,gam,N) for r in Rvals]))
+    res['ZZ'] = (Rvals,np.array([XY_exZZ(r,h,gam,N) for r in Rvals]))
     return res
 
 # Define Pauli matrices
