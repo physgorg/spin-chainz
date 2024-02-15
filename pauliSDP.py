@@ -99,30 +99,23 @@ def pOp_normalOrder(new_expr,coords): # multiply out a matmul string of paulis
 	product = ''
 	new_coords = []
 	new_coeff = 1
-	while len(new_expr) > 0:
-		end = 1
-		try:
-			while end < len(coords) and coords[end] == coords[0]:
-				end += 1
-		except IndexError:
-			end = 1
-		cluster = new_expr[:end]
-		while len(cluster)>1:
+	coordarr = np.array(coords)
+	unique_coords = np.sort(np.unique(coords))
+	for site in unique_coords:
+		cluster = ssum([new_expr[i] for i in np.where(coordarr == site)[0]])
+		while len(cluster) > 1:
 			cf,op = pmul(cluster[0],cluster[1])
-			new_coeff *= cf
+			new_coeff *= cf 
 			if len(cluster) == 2:
 				cluster = op
 			else:
 				cluster = op + cluster[2:]
-
 		if cluster[0] != 'I':
 			product += cluster[0]
-			new_coords.append(coords[0])
-
-		coords = coords[end:]
-		new_expr = new_expr[end:]
+			new_coords.append(site)
 
 	return product,new_coords,new_coeff
+	
 
 #################################################
 # FUNCTIONS FOR ANALYSIS OF SDP OUTPUT (PHYSICS)
@@ -217,15 +210,13 @@ class pOp: # pauli operators (pstring equivalent)
 		for i in length_order:
 			ops = expr[i]
 			nums = coord_arr[i]
-			
-			inds = np.argsort(nums)
-			nums.sort()
-			ops = ssum([ops[j] for j in inds]) # order by coordinate
 
 			ops,nums,cf = pOp_normalOrder(ops,nums) # multiply through stuff 
 			cf = cf*coeffs[i]
 			
 			term = [ops,nums]
+
+			# print('term+cf',term,cf)
 			if term in term_exprs:
 				loc = term_exprs.index(term)
 				unfiltered_coeffs[loc] += cf
@@ -381,30 +372,6 @@ class pauliSDP: # spin chain SDP class
 						self.Fmats[hash_val][j,i] = np.conj(coeff)
 		  
 		self.commed = [com(self.full_ham,op) for op in self.basis]
-	
-		# Create second positivity matrix
-#         self.Gmats = {val:np.zeros(self.Mshape,dtype = complex) for val in self.dual_hashes}
-#         self.Gmats[self.idhash] = np.zeros(self.Mshape,dtype = complex)
-#         for i in range(len(self.basis)):
-#             for j in range(i,len(self.basis)):
-
-#                 elem = self.basis[i]*self.commed[j] # main multiplication step here
-
-#                 for k in range(elem.n):
-#                     coeff = elem.cfs[k]
-#                     op = elem.expr[k]
-#                     xv = elem.x[k]
-#                     hash_val = pOp_hash(op,xv,N = N)
-#                     if hash_val not in self.Gmats.keys(): # if we have not got this variable yet
-#                         if hash_val != self.idhash:
-#                             self.duals.append(pOp(op,xv))
-#                             self.dual_hashes.append(hash_val)
-#                         self.Gmats[hash_val] = np.zeros(self.Mshape,dtype = complex)
-#                         self.Gmats[hash_val][i,j] = coeff
-#                         self.Gmats[hash_val][j,i] = np.conj(coeff)
-#                     elif hash_val in self.Gmats.keys():
-#                         self.Gmats[hash_val][i,j] = coeff
-#                         self.Gmats[hash_val][j,i] = np.conj(coeff)
 					
 		tt = time()     
 		if timed: print('find M, F/Gmats time =',tt -t)
@@ -611,6 +578,33 @@ class pauliSDP: # spin chain SDP class
 		return results
 
 if __name__ == '__main__':
+
+	# # define Jordan-Wigner fermions
+	# def frm_c(i):
+	# 	s_minus = 1/2*(pOp('X',i) + -1j*pOp('Y',i))
+	# 	jw_string =spOp(ssum(['Z']*(i)))
+	# 	return (-1)**(i)*jw_string*s_minus
+
+	# def frm_cdag(i):
+	# 	s_plus = 1/2*(pOp('X',i) + 1j*pOp('Y',i))
+	# 	jw_string = spOp(ssum(['Z']*(i)))
+	# 	return (-1)**(i)*jw_string*s_plus
+
+
+	# s = 7
+	# cs = frm_c(s)
+	# cds1 = frm_cdag(s+1)
+	# print(cs)
+	# print(cds1)
+
+	# print('FORWARD')
+	# p1 = cs*cds1
+	# print(p1)
+
+	# print("BACKWARD")
+	# p2 = cds1*cs
+	# print(p2)
+	# print('anticomm',p1 + p2)
 	
 	xx = spOp('XX')
 	z = spOp('Z')
